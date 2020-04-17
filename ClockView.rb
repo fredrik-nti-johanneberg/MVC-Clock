@@ -1,6 +1,7 @@
 require 'fox16'
 include Fox
-require 'eventmachine'
+# require 'eventmachine'
+require 'em/pure_ruby'
 
 class ClockModel
     
