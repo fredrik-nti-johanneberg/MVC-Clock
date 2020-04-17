@@ -5,10 +5,14 @@ require 'em/pure_ruby'
 
 class ClockModel
     
+    attr_reader :alarm_on
+    attr_writer :alarm_on
+    
     def initialize( clock_view, app )
         @clock_view = clock_view
         @app = app
         @alarm_time = { :hour => 0, :minute => 0 }
+        @alarm_on = false
         clock_updater_thread
     end
     
@@ -36,7 +40,7 @@ class ClockModel
         minute = @alarm_time[:minute].to_s.rjust( 2, "0" )
         return hour + ":" + minute
     end
-
+    
     def update_clock_view                           # inform view that model has changed
         @app.runOnUiThread do                       # GUI updates must run in UI-thread!
             @clock_view.update_time_display
@@ -114,7 +118,7 @@ class ClockView < FXMainWindow
         end
         
         @clock_value = FXLabel.new( matrix, "", :padTop => 10 )
-        clock_font = FXFont.new( app, "courier", 48 )
+        clock_font = FXFont.new( app, "consolas", 48 )
         @clock_value.font = clock_font
         
         @right_button_matrix = FXMatrix.new( matrix, 3, MATRIX_BY_ROWS | LAYOUT_FILL )
@@ -134,29 +138,22 @@ class ClockView < FXMainWindow
         
     end
     
-    def on_toggle_alarm_button_clicked( sender, sel, ptr )
-        @status_bar.statusLine.normalText = "Alarm on"
-    end
-    
-    def on_set_alarm_button_clicked( sender, sel, ptr )
-        @right_button_matrix.visible = false
-        @toggle_alarm_button.enabled = true
-        @clock_controller.change_mode( ClockController::MODE_SHOW_TIME )
-    end
-    
     def on_mode_button_clicked( sender, sel, ptr )
-        if @clock_controller.mode == ClockController::MODE_SHOW_TIME
+        case @clock_controller.mode
+        when ClockController::MODE_SHOW_TIME
             @clock_controller.change_mode( ClockController::MODE_SET_ALARM )
-            @status_bar.statusLine.normalText = "Set alarm"
-            @toggle_alarm_button.enabled = false
-            @right_button_matrix.visible = true
-        elsif @clock_controller.mode == ClockController::MODE_SET_ALARM
+        when ClockController::MODE_SET_ALARM
             @clock_controller.change_mode( ClockController::MODE_SHOW_TIME )
-            @status_bar.statusLine.normalText = ""
-            @toggle_alarm_button.enabled = true
-            @right_button_matrix.visible = false
         end
+        update_status_line
+        @toggle_alarm_button.enabled = !@toggle_alarm_button.enabled
+        @right_button_matrix.visible = !@right_button_matrix.visible?
         self.repaint
+    end
+
+    def on_toggle_alarm_button_clicked( sender, sel, ptr )
+        @clock_controller.clock_model.alarm_on = !@clock_controller.clock_model.alarm_on
+        update_status_line
     end
     
     def on_hour_button_clicked( sender, sel, ptr )
@@ -166,7 +163,31 @@ class ClockView < FXMainWindow
     def on_minute_button_clicked( sender, sel, ptr )
         @clock_controller.alarm_increment_minute
     end
+
+    def on_set_alarm_button_clicked( sender, sel, ptr )
+        @clock_controller.clock_model.alarm_on = true
+        @right_button_matrix.visible = false
+        @toggle_alarm_button.enabled = true
+        @clock_controller.change_mode( ClockController::MODE_SHOW_TIME )
+        update_status_line
+    end
     
+    def update_status_line
+        status_line = ""
+        case @clock_controller.mode
+        when ClockController::MODE_SET_ALARM    
+            status_line = "Set alarm"
+        when ClockController::MODE_SHOW_TIME
+            if @clock_controller.clock_model.alarm_on
+                status_line = "Alarm on: #{@clock_controller.clock_model.get_alarm_time_as_string}"
+                @status_bar.statusLine.normalText = status_line
+            else
+                status_line = "Alarm off"
+            end
+        end
+        @status_bar.statusLine.normalText = status_line
+    end
+
     def update_time_display
         case @clock_controller.mode
         when ClockController::MODE_SHOW_TIME
